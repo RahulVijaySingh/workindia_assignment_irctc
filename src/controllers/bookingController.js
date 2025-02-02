@@ -75,5 +75,30 @@ const bookSeat = (req, res) => {
   });
 };
 
-module.exports = { bookSeat };
+const getUserBookings = (req, res) => {
+  const userId = req.user.id; // Extract user ID from JWT token
+
+  db.query(
+    "SELECT b.id, t.name AS train_name, t.source, t.destination, b.booking_time FROM bookings b JOIN trains t ON b.train_id = t.id WHERE b.user_id = ?",
+    [userId],
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(results);
+    }
+  );
+};
+
+const getAllBookings = (req, res) => {
+  db.query(
+    "SELECT b.id, u.name AS user_name, t.name AS train_name, t.source, t.destination, b.booking_time FROM bookings b JOIN users u ON b.user_id = u.id JOIN trains t ON b.train_id = t.id",
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(results);
+    }
+  );
+};
+
+// ✅ Export at the end
+
+module.exports = { bookSeat, getUserBookings, getAllBookings };
 console.log("Exported functions from bookingController:", module.exports);
