@@ -1,16 +1,51 @@
 const jwt = require("jsonwebtoken");
+const dotenv = require("dotenv");
 
-exports.verifyAdmin = (req, res, next) => {
-  try {
-    const token = req.headers.authorization.split(" ")[1]; // "Bearer <TOKEN>"
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+dotenv.config();
 
-    if (decoded.role !== "admin") {
-      return res.status(403).json({ message: "Access Denied! Admins only." });
+const verifyUser = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).json({ error: "Authorization token missing" });
+  }
+
+  const token = authHeader.split(" ")[1];
+  console.log(process.env.JWT_SECRET);
+  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+    if (err) {
+      return res.status(403).json({ error: "Invalid token" });
+    }
+    req.user = decoded;
+    next(); // ✅ Call next() to proceed to the booking controller
+  });
+};
+
+const verifyAdmin = (req, res, next) => {
+  console.log("verifyAdmin middleware triggered");
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    console.log("Authorization token missing");
+    return res.status(401).json({ error: "Authorization token missing" });
+  }
+
+  const token = authHeader.split(" ")[1];
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+    if (err) {
+      console.log("Invalid token");
+      return res.status(403).json({ error: "Invalid token" });
     }
 
-    next(); // Continue if admin
-  } catch (err) {
-    return res.status(401).json({ message: "Invalid or missing token" });
-  }
+    if (decoded.role !== "admin") {
+      console.log("User is not an admin");
+      return res.status(403).json({ error: "Access Denied! Admins only." });
+    }
+
+    req.user = decoded;
+    next(); // ✅ Continue if user is admin
+  });
 };
+
+// ✅ Ensure correct export
+module.exports = { verifyUser, verifyAdmin };
