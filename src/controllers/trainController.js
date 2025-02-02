@@ -13,3 +13,16 @@ exports.addTrain = (req, res) => {
     }
   );
 };
+
+exports.getTrains = (req, res) => {
+  const { source, destination } = req.query;
+
+  db.query(
+    "SELECT * FROM trains WHERE source = ? AND destination = ?",
+    [source, destination],
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(results);
+    }
+  );
+};
