@@ -11,66 +11,56 @@ const bookSeat = (req, res) => {
     if (err) return res.status(500).json({ error: err.message });
 
     // Start transaction to prevent race conditions
-    connection.beginTransaction((err) => {
-      if (err) return res.status(500).json({ error: err.message });
+    connection.beginTransaction(async (err) => {
+      if (err) {
+        connection.release();
+        return res.status(500).json({ error: err.message });
+      }
 
-      // Step 1: Check seat availability
-      connection.query(
-        "SELECT available_seats FROM trains WHERE id = ? FOR UPDATE",
-        [train_id],
-        (err, results) => {
-          if (err)
-            return connection.rollback(() =>
-              res.status(500).json({ error: err.message })
-            );
+      try {
+        // Step 1: Lock the train record and check available seats
+        const [seats] = await connection
+          .promise()
+          .query("SELECT available_seats FROM trains WHERE id = ? FOR UPDATE", [
+            train_id,
+          ]);
 
-          if (results.length === 0) {
-            return connection.rollback(() =>
-              res.status(404).json({ error: "Train not found" })
-            );
-          }
-
-          const availableSeats = results[0].available_seats;
-          if (availableSeats <= 0) {
-            return connection.rollback(() =>
-              res.status(400).json({ error: "No seats available" })
-            );
-          }
-
-          // Step 2: Reduce the available seat count
-          connection.query(
-            "UPDATE trains SET available_seats = available_seats - 1 WHERE id = ?",
-            [train_id],
-            (err) => {
-              if (err)
-                return connection.rollback(() =>
-                  res.status(500).json({ error: err.message })
-                );
-
-              // Step 3: Insert the booking
-              connection.query(
-                "INSERT INTO bookings (user_id, train_id) VALUES (?, ?)",
-                [user_id, train_id],
-                (err) => {
-                  if (err)
-                    return connection.rollback(() =>
-                      res.status(500).json({ error: err.message })
-                    );
-
-                  // Step 4: Commit the transaction
-                  connection.commit((err) => {
-                    if (err)
-                      return connection.rollback(() =>
-                        res.status(500).json({ error: err.message })
-                      );
-                    res.json({ message: "Seat booked successfully" });
-                  });
-                }
-              );
-            }
-          );
+        if (seats.length === 0) {
+          throw { status: 404, message: "Train not found" };
         }
-      );
+
+        if (seats[0].available_seats <= 0) {
+          throw { status: 400, message: "No seats available" };
+        }
+
+        // Step 2: Reduce the available seat count
+        await connection
+          .promise()
+          .query(
+            "UPDATE trains SET available_seats = available_seats - 1 WHERE id = ?",
+            [train_id]
+          );
+
+        // Step 3: Insert the booking record
+        await connection
+          .promise()
+          .query("INSERT INTO bookings (user_id, train_id) VALUES (?, ?)", [
+            user_id,
+            train_id,
+          ]);
+
+        // Step 4: Commit the transaction
+        await connection.promise().commit();
+
+        res.json({ message: "Seat booked successfully" });
+      } catch (error) {
+        await connection.promise().rollback();
+        res
+          .status(error.status || 500)
+          .json({ error: error.message || "Internal Server Error" });
+      } finally {
+        connection.release();
+      }
     });
   });
 };
