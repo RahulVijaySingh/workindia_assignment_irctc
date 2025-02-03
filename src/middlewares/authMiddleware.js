@@ -11,6 +11,7 @@ const verifyUser = (req, res, next) => {
 
   const token = authHeader.split(" ")[1];
   console.log(process.env.JWT_SECRET);
+
   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
     if (err) {
       return res.status(403).json({ error: "Invalid token" });
@@ -47,5 +48,19 @@ const verifyAdmin = (req, res, next) => {
   });
 };
 
-// ✅ Ensure correct export
-module.exports = { verifyUser, verifyAdmin };
+// 🔹 New: Secure Admin Routes with API Key
+const verifyAdminWithAPIKey = (req, res, next) => {
+  console.log("verifyAdminWithAPIKey middleware triggered");
+
+  const apiKey = req.headers["x-api-key"];
+
+  if (!apiKey || apiKey !== process.env.ADMIN_API_KEY) {
+    console.log("Invalid or missing API key");
+    return res.status(403).json({ error: "Invalid or missing API key" });
+  }
+
+  next(); // ✅ Continue if API key is correct
+};
+
+// ✅ Export functions at the end
+module.exports = { verifyUser, verifyAdmin, verifyAdminWithAPIKey };
